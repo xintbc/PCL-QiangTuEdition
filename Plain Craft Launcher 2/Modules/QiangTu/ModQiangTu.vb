@@ -333,6 +333,43 @@ Public Module ModQiangTu
         If Directory.Exists(目录) Then Directory.Delete(目录, True)
     End Sub
 
+    ''' <summary>模组目录（枪战突击的模组放在 mode\模组\，兼容包里多套一层「多文件版\」的情况）。</summary>
+    Private Function 模组目录Of(项 As 版本信息) As String
+        Dim 目录 = 本版本目录(项)
+        Dim 甲 = Path.Combine(目录, "mode", "模组")
+        Dim 乙 = Path.Combine(目录, "多文件版", "mode", "模组")
+        If Directory.Exists(甲) Then Return 甲
+        If Directory.Exists(乙) Then Return 乙
+        Return 甲
+    End Function
+
+    ''' <summary>这个版本当前装了哪些模组（文件名列表）。</summary>
+    Public Function 已装模组(项 As 版本信息) As List(Of String)
+        Dim 结果 As New List(Of String)
+        Try
+            Dim d = 模组目录Of(项)
+            If Directory.Exists(d) Then
+                For Each f In Directory.GetFiles(d, "*.js")
+                    结果.Add(Path.GetFileName(f))
+                Next
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "统计已装模组失败")
+        End Try
+        Return 结果
+    End Function
+
+    ''' <summary>删掉某个版本里的一个模组。</summary>
+    Public Sub 删除模组(项 As 版本信息, 文件名 As String)
+        Dim d = 模组目录Of(项)
+        Dim 全 = Path.Combine(d, 文件名)
+        If File.Exists(全) Then
+            File.Delete(全)
+        Else
+            Throw New FileNotFoundException("找不到这个模组文件：" & 文件名)
+        End If
+    End Sub
+
     ' ==========================================================================
     '  账号管理
     '  ------------------------------------------------------------------------

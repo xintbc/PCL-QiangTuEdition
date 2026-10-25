@@ -194,8 +194,43 @@ Public Class FormQiangTu
             If 第一项 Is Nothing Then 第一项 = 项
         Next
 
+        刷新模组列表(Nothing)
+
+        LabStatus.Text = "共 " & 版本表.Count & " 个版本 · 版本库：" & ModQiangTu.版本库目录
+        ' 便于无界面验证：日志里能看到列表真的建出来了
+        Logger.Info($"枪战突击界面：版本项 {PanVersionList.Children.Count} 个 / 模组项 {PanModList.Children.Count} 个")
+        If 第一项 IsNot Nothing Then 选定版本(TryCast(第一项.Tag, ModQiangTu.版本信息))
+    End Sub
+
+    ''' <summary>按选中版本刷新模组区：先列**这个版本已装**的，再列能下载的。</summary>
+    Private Sub 刷新模组列表(v As ModQiangTu.版本信息)
         PanModList.Children.Clear()
+        Dim 已装 As New List(Of String)
+        If v IsNot Nothing AndAlso v.已安装 Then
+            Try
+                已装 = ModQiangTu.已装模组(v)
+            Catch
+            End Try
+        End If
+
+        ' 已装的排前面（带 ✔ 已装）
+        For Each 名 In 已装
+            Dim 项 As New MyListItem With {
+                .Title = "✔ " & 名,
+                .Info = "已装在这个版本里 · 点我可删除",
+                .Type = MyListItem.CheckType.Clickable,
+                .MinPaddingRight = 24
+            }
+            AddHandler 项.Click, AddressOf 已装模组点击
+            项.Tag = New Object() {名, v}
+            PanModList.Children.Add(项)
+        Next
+
+        ' 再列发布中心里可下载的（已装的标出来，不重复列）
+        Dim 可下 As Integer = 0
         For Each m In 模组表
+            If 已装.Contains(m.名字) Then Continue For
+            可下 += 1
             Dim 项 As New MyListItem With {
                 .Title = m.名字,
                 .Info = If(String.IsNullOrEmpty(m.兼容), "通用", m.兼容) & " · " & (m.大小 / 1024).ToString("0") & " KB · 点我下载",
@@ -206,12 +241,34 @@ Public Class FormQiangTu
             项.Tag = m
             PanModList.Children.Add(项)
         Next
-        LabModHint.Text = 模组表.Count & " 个可下载"
 
-        LabStatus.Text = "共 " & 版本表.Count & " 个版本 · 版本库：" & ModQiangTu.版本库目录
-        ' 便于无界面验证：日志里能看到列表真的建出来了
-        Logger.Info($"枪战突击界面：版本项 {PanVersionList.Children.Count} 个 / 模组项 {PanModList.Children.Count} 个")
-        If 第一项 IsNot Nothing Then 选定版本(TryCast(第一项.Tag, ModQiangTu.版本信息))
+        If v Is Nothing Then
+            LabModHint.Text = "先选一个版本"
+        ElseIf Not v.已安装 Then
+            LabModHint.Text = "版本未安装 · 可下载 " & 可下 & " 个"
+        Else
+            LabModHint.Text = "已装 " & 已装.Count & " 个 · 可下载 " & 可下 & " 个"
+        End If
+    End Sub
+
+    ''' <summary>点已装模组 = 删除它（带确认）。</summary>
+    Private Sub 已装模组点击(sender As Object, e As MouseButtonEventArgs)
+        Dim 项 = TryCast(sender, MyListItem)
+        If 项 Is Nothing Then Return
+        Dim 包 = TryCast(项.Tag, Object())
+        If 包 Is Nothing OrElse 包.Length < 2 Then Return
+        Dim 名 = TryCast(包(0), String)
+        Dim v = TryCast(包(1), ModQiangTu.版本信息)
+        If String.IsNullOrEmpty(名) OrElse v Is Nothing Then Return
+        If MessageBox.Show("从这个版本里删除模组「" & 名 & "」吗？", "删除模组",
+                           MessageBoxButton.YesNo, MessageBoxImage.Question) <> MessageBoxResult.Yes Then Return
+        Try
+            ModQiangTu.删除模组(v, 名)
+            LabProgress.Text = "已删除模组 " & 名
+            刷新模组列表(v)
+        Catch ex As Exception
+            MessageBox.Show(ex.Message, "删除失败", MessageBoxButton.OK, MessageBoxImage.Warning)
+        End Try
     End Sub
 
     Private Sub 版本项点击(sender As Object, e As MouseButtonEventArgs)
@@ -231,6 +288,7 @@ Public Class FormQiangTu
         BtnDownload.IsEnabled = Not 忙
         ' 已装过也能再下一次（覆盖更新/修复）：按钮文案跟着变，别让玩家以为只能下一次
         BtnDownload.Text = If(v.已安装, "重新下载", "下载")
+        刷新模组列表(v)
     End Sub
 
     ' ==================== 下载 ====================
@@ -262,6 +320,7 @@ Public Class FormQiangTu
                                       BarProgress.IsIndeterminate = False
                                       BarProgress.Value = 1
                                       LabProgress.Text = "v" & v.版本 & " 已装好（可重复下载 / 多版本共存），点「启动游戏」"
+                                      刷新模组列表(v)
                                   End If
                                   忙 = False
                                   刷新清单()
