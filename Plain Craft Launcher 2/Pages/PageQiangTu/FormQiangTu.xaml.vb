@@ -29,6 +29,7 @@ Public Class FormQiangTu
     Public Sub New()
         InitializeComponent()
         AddHandler Loaded, AddressOf 窗口加载
+        AddHandler Closed, AddressOf 窗口关闭
         AddHandler BtnRefresh.Click, AddressOf 刷新按钮
         AddHandler BtnDownload.Click, AddressOf 下载选中
         AddHandler BtnLaunch.Click, AddressOf 启动选中
@@ -36,6 +37,18 @@ Public Class FormQiangTu
         AddHandler CmbAccount.SelectionChanged, AddressOf 账号切换
         AddHandler BtnAccAdd.Click, AddressOf 账号新增
         AddHandler BtnAccEdit.Click, AddressOf 账号编辑
+    End Sub
+
+    ''' <summary>关掉窗口就退出进程（PCL 的 ShutdownMode 是 OnExplicitShutdown，不主动关会留后台）。</summary>
+    Private Sub 窗口关闭(sender As Object, e As EventArgs)
+        Try
+            System.Windows.Application.Current.Shutdown()
+        Catch
+        End Try
+        Try
+            Environment.Exit(0)          ' 兜底：后台还有下载线程时 Shutdown 可能被拦
+        Catch
+        End Try
     End Sub
 
     Private Sub 窗口加载(sender As Object, e As RoutedEventArgs)
