@@ -1,0 +1,44 @@
+name: 构建 PCL 枪战突击修改版
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: 取出源码
+        uses: actions/checkout@v4
+
+      - name: 准备 MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: 还原 NuGet 包
+        run: msbuild "Plain Craft Launcher 2.sln" /t:Restore /p:Configuration=Release /verbosity:minimal
+
+      - name: 编译（Release / Any CPU）
+        run: msbuild "Plain Craft Launcher 2.sln" /p:Configuration=Release /p:Platform="Any CPU" /m /verbosity:minimal
+
+      - name: 收集产物
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          $bin = "Plain Craft Launcher 2\bin"
+          if (Test-Path $bin) {
+            Copy-Item "$bin\*.exe" output\ -ErrorAction SilentlyContinue
+            Copy-Item "$bin\*.dll" output\ -ErrorAction SilentlyContinue
+            Copy-Item "$bin\*.config" output\ -ErrorAction SilentlyContinue
+            Copy-Item "$bin\*.xml" output\ -ErrorAction SilentlyContinue
+          }
+          Write-Host "产物清单："
+          Get-ChildItem output | Select-Object Name, Length | Format-Table
+
+      - name: 上传可执行文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: PCL-QiangTuEdition
+          path: output
+          retention-days: 30

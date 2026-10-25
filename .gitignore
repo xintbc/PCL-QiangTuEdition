@@ -1,0 +1,10 @@
+# 编译产物
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# 系统杂物
+.DS_Store
+Thumbs.db
