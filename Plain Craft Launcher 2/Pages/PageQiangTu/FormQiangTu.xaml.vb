@@ -10,6 +10,7 @@
 
 Imports System.ComponentModel
 Imports System.Diagnostics
+Imports System.Linq
 Imports System.Threading.Tasks
 Imports System.Windows
 Imports System.Windows.Controls
@@ -25,6 +26,7 @@ Public Class FormQiangTu
     Private 当前账号名 As String = ""
     Private 选中版本项 As ModQiangTu.版本信息 = Nothing
     Private 忙 As Boolean = False
+    Private _待自动下载 As String = Nothing   ' 命令行 /下载 <版本号> 用（自动化测试/高级用户）
 
     Public Sub New()
         InitializeComponent()
@@ -59,6 +61,15 @@ Public Class FormQiangTu
         Catch
         End Try
         载入账号()
+        ' 命令行：枪战突击启动器.exe /下载 1.7.0  → 拉起界面后自动下这个版本（测试/批量装机用）
+        Try
+            Dim 参 = Environment.GetCommandLineArgs()
+            If 参.Length >= 3 AndAlso String.Equals(参(1), "/下载", StringComparison.OrdinalIgnoreCase) Then
+                _待自动下载 = 参(2)
+                Logger.Info("枪战突击：命令行指定自动下载 v" & _待自动下载)
+            End If
+        Catch
+        End Try
         刷新清单()
     End Sub
 
@@ -183,6 +194,17 @@ Public Class FormQiangTu
                                       版本表 = 列表
                                       模组表 = 新模组
                                       重建列表()
+                                      If Not String.IsNullOrEmpty(_待自动下载) Then
+                                          Dim 想下 = _待自动下载
+                                          _待自动下载 = Nothing
+                                          Dim 目标 = 版本表.FirstOrDefault(Function(x) x.版本 = 想下)
+                                          If 目标 IsNot Nothing Then
+                                              选定版本(目标)
+                                              下载选中(Nothing, Nothing)
+                                          Else
+                                              LabStatus.Text = "命令行要的版本 v" & 想下 & " 不在清单里"
+                                          End If
+                                      End If
                                   End If
                                   BarProgress.IsIndeterminate = False
                               Catch
