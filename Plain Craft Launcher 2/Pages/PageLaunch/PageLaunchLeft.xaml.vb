@@ -605,15 +605,21 @@ Finish:
     '版本选择按钮
     Private Sub BtnVersion_Click() Handles BtnVersion.Click
         If McLaunchLoader.State = LoadState.Loading Then Return
-        '【改造】本地还没有枪战突击版本 → 先把最新版拉下来（1MB 左右，很快）
-        Try
-            If ModQiangTu.本地版本数() = 0 Then
-                下载最新枪战突击版本()
-                Return
-            End If
-        Catch
-        End Try
         FrmMain.PageChange(FormMain.PageType.InstanceSelect)
+    End Sub
+
+    '【改造】下载枪战突击版本（打开下载窗口；关掉后刷新版本列表）
+    Private Sub BtnQiangTuDown_Click() Handles BtnQiangTuDown.Click
+        If McLaunchLoader.State = LoadState.Loading Then Return
+        Try
+            Dim 窗 As New FormQiangTu
+            窗.Owner = FrmMain
+            窗.ShowDialog()
+            McInstanceListForceRefresh = True
+            LoaderFolderRun(McInstanceListLoader, McFolderSelected, LoaderFolderRunType.ForceRun, MaxDepth:=1, ExtraPath:="versions\")
+        Catch ex As Exception
+            Hint("打开下载窗口失败：" & ex.Message, HintType.Red)
+        End Try
     End Sub
 
     ''' <summary>【改造】下载发布中心的最新版本，装进 versions 目录，然后刷新列表。</summary>

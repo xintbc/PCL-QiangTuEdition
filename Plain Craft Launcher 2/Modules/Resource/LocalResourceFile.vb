@@ -21,7 +21,8 @@ Public Class LocalResourceFile
     ''' </summary>
     Public ReadOnly Property IsEnabled As Boolean
         Get
-            Return {".jar", ".zip", ".litemod"}.Contains(File.Extension.Lower)
+            '【改造】多认 .js：枪战突击的模组就是 .js，不加这个会被判成「已禁用」
+            Return {".jar", ".zip", ".litemod", ".js"}.Contains(File.Extension.Lower)
         End Get
     End Property
     ''' <summary>

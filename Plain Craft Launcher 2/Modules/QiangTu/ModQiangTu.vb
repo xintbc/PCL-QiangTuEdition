@@ -158,15 +158,34 @@ Public Module ModQiangTu
             Directory.CreateDirectory(目录)
             Dim 名 = 实例名(项)
             Dim 路径 = Path.Combine(目录, 名 & ".json")
-            If File.Exists(路径) Then Return
+            ' 老格式（id 写成了实例名）要重写，不然 PCL 一直认不出来
+            If File.Exists(路径) Then
+                Try
+                    Dim 旧 = JObject.Parse(File.ReadAllText(路径, Encoding.UTF8))
+                    If If(旧("id")?.ToString(), "") = 名 Then
+                        File.Delete(路径)
+                    Else
+                        Return
+                    End If
+                Catch
+                    Try : File.Delete(路径) : Catch : End Try
+                End Try
+            End If
+            ' ⚠️ 关键：PCL 会用 JSON 里的 id 去解析「MC 版本号」（Version.VanillaName）。
+            '    解析不出来（比如 id 写成「枪战突击 v1.7.0」）→ VanillaName = "Unknown"
+            '    → State 被判成 Error，版本列表里直接不显示（这就是「扫描不到游戏本体」的根因）。
+            '    所以 id 固定写成一个合法 MC 版本号，显示名走目录名（Name）——两者可以不同：
+            '    PCL 找 JSON 用的是「目录名.json」，列表里显示的也是目录名。
             Dim obj As New JObject From {
-                {"id", 名},
+                {"id", "1.12.2"},
                 {"type", If(项.类型 = "预览", "snapshot", "release")},
                 {"time", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")},
                 {"releaseTime", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")},
                 {"libraries", New JArray()},
                 {"mainClass", "qiangtu.launcher"},
-                {"minecraftArguments", ""}
+                {"minecraftArguments", ""},
+                {"assets", "1.12"},
+                {"assetIndex", New JObject From {{"id", "1.12"}, {"totalSize", 0}}}
             }
             File.WriteAllText(路径, obj.ToString(), New UTF8Encoding(False))
         Catch ex As Exception
