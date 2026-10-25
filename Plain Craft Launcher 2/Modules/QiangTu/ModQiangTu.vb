@@ -1,15 +1,13 @@
 ' ============================================================================
 '  PCL 枪战突击修改版 · 游戏数据层（ModQiangTu.vb）
 '  ----------------------------------------------------------------------------
-'  把原版 PCL 的「Minecraft 版本管理」换成「枪战突击版本管理」：
-'    · 版本清单从发布中心 manifest.json 拉取（不是 MC 版本 JSON）
-'    · 下载用 PCL 原有的多线程下载器 LoaderDownload（分片并发）
-'    · 解压用 System.IO.Compression（zip）
-'    · 「启动」= 用默认浏览器打开该版本的 index.html（不是调 Java）
-'    · 账号：启动器自己管**一份**账号表（账号.json，在启动器目录），启动时注入到游戏
-'
-'  说明：本文件是第三方基于 PCL 二次创作的新增代码，不修改原 PCL 逻辑，
-'        只在旁边加一套独立的枪战突击数据通路，降低改坏原项目的风险。
+'  核心思路（用户口径：直接改 PCL，别另做界面）：
+'    · 把 PCL 眼里的「.minecraft」指向 <启动器目录>\枪战突击\
+'    · 让 versions 目录直接当枪战突击的版本目录（每个版本一个文件夹 + 一个占位 JSON）
+'      → PCL 原版界面（版本列表 / 实例管理 / 模组 / 存档）全部原样复用，不改美术不改排布
+'    · 「启动」拦在 McLaunchStart 之前：枪战突击版本直接开 index.html，不走 Java
+'    · 下载走 PCL 自带的 LoaderDownload（多线程分片）
+'    · 账号：启动器自己管一份账号表（账号.json），启动时注入进游戏
 ' ============================================================================
 
 Imports System.Diagnostics
@@ -26,14 +24,41 @@ Public Module ModQiangTu
     ''' <summary>枪战突击发布中心（GitHub Pages）。</summary>
     Public Const 发布中心 As String = "https://xintbc.github.io/qiangtuskill/"
 
-    ''' <summary>版本库根目录：每个版本一个独立子目录。</summary>
-    Public ReadOnly Property 版本库目录 As String
+    ''' <summary>版本名前缀（PCL 里显示成「枪战突击 v1.7.0」）。</summary>
+    Public Const 实例前缀 As String = "枪战突击 v"
+
+    ''' <summary>
+    ''' 游戏根目录（= PCL 眼里的 .minecraft）。
+    ''' </summary>
+    Public ReadOnly Property 游戏根目录 As String
         Get
-            Dim 根 = Path.Combine(Path.GetDirectoryName(GetType(ModQiangTu).Assembly.Location), "枪战突击版本库")
-            Directory.CreateDirectory(根)
+            Dim 根 = Path.Combine(Path.GetDirectoryName(GetType(ModQiangTu).Assembly.Location), "枪战突击")
+            Try
+                Directory.CreateDirectory(根)
+                Directory.CreateDirectory(Path.Combine(根, "versions"))
+            Catch
+            End Try
             Return 根
         End Get
     End Property
+
+    ''' <summary>版本库 = 游戏根\versions（就是 PCL 的版本目录）。</summary>
+    Public ReadOnly Property 版本库目录 As String
+        Get
+            Return Path.Combine(游戏根目录, "versions")
+        End Get
+    End Property
+
+    ''' <summary>版本在 PCL 里的显示名（也是目录名）。</summary>
+    Public Function 实例名(项 As 版本信息) As String
+        Return 实例前缀 & 项.版本
+    End Function
+
+    ''' <summary>判断某个 PCL 版本实例是不是枪战突击的。</summary>
+    Public Function 是枪战突击实例(名 As String) As Boolean
+        If String.IsNullOrEmpty(名) Then Return False
+        Return 名.StartsWith("枪战突击", StringComparison.OrdinalIgnoreCase)
+    End Function
 
     ' ---------------- 数据结构 ----------------
     Public Class 版本信息
@@ -43,6 +68,7 @@ Public Module ModQiangTu
         Public Property Md5 As String = ""
         Public Property 日期 As String = ""
         Public Property 说明 As String = ""
+        Public Property 类型 As String = "正式"      ' 正式 / 预览（PCL 里按 release / snapshot 分组）
 
         ''' <summary>这个版本在本地是否已装好（目录存在且有 index.html）。</summary>
         Public ReadOnly Property 已安装 As Boolean
@@ -70,9 +96,14 @@ Public Module ModQiangTu
         Public Property 兼容 As String = ""
     End Class
 
-    ''' <summary>某个版本的目录（版本库\枪战突击_vX.Y.Z）。</summary>
+    ''' <summary>某个版本的目录（版本库\枪战突击 vX.Y.Z）。</summary>
     Public Function 本版本目录(项 As 版本信息) As String
-        Return Path.Combine(版本库目录, "枪战突击_v" & 项.版本)
+        Return Path.Combine(版本库目录, 实例名(项))
+    End Function
+
+    ''' <summary>按实例名（PCL 传过来的）找本地目录。</summary>
+    Public Function 实例目录(名 As String) As String
+        Return Path.Combine(版本库目录, 名)
     End Function
 
     ' ---------------- 拉清单 ----------------
@@ -93,7 +124,8 @@ Public Module ModQiangTu
                         .大小 = If(项("大小") IsNot Nothing, 项("大小").Value(Of Long)(), 0L),
                         .Md5 = If(项("md5")?.ToString(), ""),
                         .日期 = If(项("日期")?.ToString(), ""),
-                        .说明 = If(项("说明")?.ToString(), "")
+                        .说明 = If(项("说明")?.ToString(), ""),
+                        .类型 = If(项("类型")?.ToString(), "正式")
                     })
                 Next
             End If
@@ -116,20 +148,72 @@ Public Module ModQiangTu
         Return 结果
     End Function
 
-    ' ---------------- 下载 ----------------
     ''' <summary>
-    ''' 下载并安装一个版本：下载 zip（PCL 多线程下载器）→ 解压到独立目录 → 写已装标记。
+    ''' 给某个版本目录写 PCL 认得的「版本 JSON」占位文件（没它 PCL 不把它当版本）。
+    ''' 内容按最小 MC 版本结构写，PCL 只用来显示名字/图标，不会真的去启动 Java（启动被我们拦了）。
     ''' </summary>
+    Public Sub 写版本占位Json(项 As 版本信息)
+        Try
+            Dim 目录 = 本版本目录(项)
+            Directory.CreateDirectory(目录)
+            Dim 名 = 实例名(项)
+            Dim 路径 = Path.Combine(目录, 名 & ".json")
+            If File.Exists(路径) Then Return
+            Dim obj As New JObject From {
+                {"id", 名},
+                {"type", If(项.类型 = "预览", "snapshot", "release")},
+                {"time", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")},
+                {"releaseTime", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")},
+                {"libraries", New JArray()},
+                {"mainClass", "qiangtu.launcher"},
+                {"minecraftArguments", ""}
+            }
+            File.WriteAllText(路径, obj.ToString(), New UTF8Encoding(False))
+        Catch ex As Exception
+            Logger.Warn(ex, "写版本占位 JSON 失败")
+        End Try
+    End Sub
+
+    ''' <summary>本地已装的枪战突击版本数（用于判断要不要先下载）。</summary>
+    Public Function 本地版本数() As Integer
+        Dim 数 As Integer = 0
+        Try
+            If Not Directory.Exists(版本库目录) Then Return 0
+            For Each d In Directory.GetDirectories(版本库目录)
+                If 是枪战突击实例(Path.GetFileName(d)) Then 数 += 1
+            Next
+        Catch
+        End Try
+        Return 数
+    End Function
+
+    ''' <summary>扫本地已装的枪战突击版本目录（用于补占位 JSON）。</summary>
+    Public Sub 修补所有占位Json()
+        Try
+            If Not Directory.Exists(版本库目录) Then Return
+            For Each d In Directory.GetDirectories(版本库目录)
+                Dim 名 = Path.GetFileName(d)
+                If Not 是枪战突击实例(名) Then Continue For
+                Dim 路径 = Path.Combine(d, 名 & ".json")
+                If File.Exists(路径) Then Continue For
+                Dim 版本 = 名.Substring(实例前缀.Length)
+                写版本占位Json(New 版本信息 With {.版本 = 版本})
+            Next
+        Catch ex As Exception
+            Logger.Warn(ex, "修补占位 JSON 失败")
+        End Try
+    End Sub
+
+    ' ---------------- 下载 ----------------
+    ''' <summary>下载并安装一个版本：下载 zip（PCL 多线程下载器）→ 解压 → 写占位 JSON。</summary>
     Public Sub 下载并安装(项 As 版本信息, Optional 进度 As Action(Of Double, String) = Nothing)
         Dim 目录 = 本版本目录(项)
         Directory.CreateDirectory(目录)
         Dim zip路径 = Path.Combine(目录, "_下载.zip")
         Dim url = 发布中心 & "版本/" & Uri.EscapeDataString(项.文件)
 
-        ' 用 PCL 自带的多线程下载器（LoaderDownload 内部就是分片并发）
-        Dim 任务 As New LoaderDownload($"枪战突击 v{项.版本}", New List(Of NetFile) From {New NetFile({url}, zip路径)})
+        Dim 任务 As New LoaderDownload("枪战突击 " & 项.版本, New List(Of NetFile) From {New NetFile({url}, zip路径)})
         任务.Start()
-        ' LoaderBase 没有进度事件（只有 Progress 属性）→ 轮询汇报
         While 任务.State = LoadState.Waiting OrElse 任务.State = LoadState.Loading
             进度?.Invoke(任务.Progress, "下载中 " & 任务.Progress.ToString("P0"))
             Thread.Sleep(150)
@@ -143,7 +227,6 @@ Public Module ModQiangTu
 
         进度?.Invoke(1.0, "解压中…")
 
-        ' 解压（标准 zip；zip-slip 防护在 解压Zip 里）
         If File.Exists(zip路径) Then
             Try
                 解压Zip(zip路径, 目录)
@@ -154,6 +237,7 @@ Public Module ModQiangTu
             Throw New FileNotFoundException("下载失败：临时文件不存在")
         End If
 
+        写版本占位Json(项)
         Try
             File.WriteAllText(Path.Combine(目录, ".已安装"), 项.版本 & vbCrLf & DateTime.Now.ToString("yyyy-MM-dd HH:mm"))
         Catch
@@ -188,7 +272,7 @@ Public Module ModQiangTu
 
         Dim 目标 = Path.Combine(模组目录, 模组.名字)
         Dim url = 发布中心 & "模组/" & Uri.EscapeDataString(模组.名字)
-        Dim 任务 As New LoaderDownload($"模组 {模组.名字}", New List(Of NetFile) From {New NetFile({url}, 目标)})
+        Dim 任务 As New LoaderDownload("模组 " & 模组.名字, New List(Of NetFile) From {New NetFile({url}, 目标)})
         任务.Start()
         While 任务.State = LoadState.Waiting OrElse 任务.State = LoadState.Loading
             进度?.Invoke(任务.Progress, "下载中 " & 任务.Progress.ToString("P0"))
@@ -202,40 +286,25 @@ Public Module ModQiangTu
         任务.WaitForExit()
     End Sub
 
-    ''' <summary>这个版本当前装了哪些模组（文件名列表）。</summary>
-    Public Function 已装模组(项 As 版本信息) As List(Of String)
-        Dim 结果 As New List(Of String)
-        Dim 目录 = 本版本目录(项)
-        Dim 候选 As String() = {
-            Path.Combine(目录, "mode", "模组"),
-            Path.Combine(目录, "多文件版", "mode", "模组")
-        }
-        For Each d In 候选
-            If Directory.Exists(d) Then
-                For Each f In Directory.GetFiles(d, "*.js")
-                    结果.Add(Path.GetFileName(f))
-                Next
-                Exit For
-            End If
-        Next
-        Return 结果
-    End Function
-
     ' ---------------- 启动 ----------------
     ''' <summary>
-    ''' 启动一个版本：打开它的 index.html（用系统默认浏览器）。
-    ''' 带了账号就把账号拼进 URL —— 游戏端写进 localStorage，于是所有版本共用启动器这份账号。
+    ''' 启动某个实例（PCL 点「启动游戏」时会走到这）。
+    ''' 参数是 PCL 的实例名；账号会自动带上（启动器那份账号表里当前选中的）。
     ''' </summary>
-    Public Sub 启动版本(项 As 版本信息, Optional 账号 As 账号信息 = Nothing)
-        Dim 目录 = 本版本目录(项)
+    Public Sub 启动实例(实例名 As String, Optional 账号 As 账号信息 = Nothing)
+        Dim 目录 = 实例目录(实例名)
         Dim 入口 = Path.Combine(目录, "index.html")
         If Not File.Exists(入口) Then 入口 = Path.Combine(目录, "多文件版", "index.html")
         If Not File.Exists(入口) Then
-            Throw New FileNotFoundException("这个版本还没下载完（找不到 index.html）")
+            Throw New FileNotFoundException("这个版本还没下载完（找不到 index.html）：" & 目录)
         End If
         Dim 参 As String = 账号参数(账号)
-        Dim 目标 As String = New Uri(入口).AbsoluteUri & 参
-        Process.Start(New ProcessStartInfo(目标) With {.UseShellExecute = True})
+        Process.Start(New ProcessStartInfo(New Uri(入口).AbsoluteUri & 参) With {.UseShellExecute = True})
+    End Sub
+
+    ''' <summary>启动一个版本（内部用）。</summary>
+    Public Sub 启动版本(项 As 版本信息, Optional 账号 As 账号信息 = Nothing)
+        启动实例(实例名(项), 账号)
     End Sub
 
     ''' <summary>删掉一个版本的本地文件（保留版本库根）。</summary>
@@ -247,7 +316,7 @@ Public Module ModQiangTu
     ' ==========================================================================
     '  账号管理
     '  ------------------------------------------------------------------------
-    '    · 启动器自己维护**一份**账号表（不在各版本目录里）→ 所有版本天然共用
+    '    · 启动器自己维护一份账号表（不在各版本目录里）→ 所有版本天然共用
     '    · 下新版本不用抄账号：启动时把选中账号拼进 URL，游戏端写进 localStorage
     '    · 支持多账号（跟 PCL 一样能切换）
     '  账号文件：exe 同目录 \ 账号.json
@@ -262,8 +331,8 @@ Public Module ModQiangTu
         Public ReadOnly Property 显示 As String
             Get
                 Dim 尾巴 As String = ""
-                If Not String.IsNullOrEmpty(身份码) Then 尾巴 = "　[" & 身份码 & "]"
-                If Not String.IsNullOrEmpty(备注) Then 尾巴 &= "　" & 备注
+                If Not String.IsNullOrEmpty(身份码) Then 尾巴 = "  [" & 身份码 & "]"
+                If Not String.IsNullOrEmpty(备注) Then 尾巴 = 尾巴 & "  " & 备注
                 Return 名字 & 尾巴
             End Get
         End Property
@@ -322,9 +391,24 @@ Public Module ModQiangTu
     Public Function 账号参数(a As 账号信息) As String
         If a Is Nothing OrElse String.IsNullOrEmpty(a.名字) Then Return ""
         Dim 串 As String = "?pclname=" & Uri.EscapeDataString(a.名字)
-        If Not String.IsNullOrEmpty(a.身份码) Then 串 &= "&pclcode=" & Uri.EscapeDataString(a.身份码)
-        If Not String.IsNullOrEmpty(a.Cid) Then 串 &= "&pclcid=" & Uri.EscapeDataString(a.Cid)
+        If Not String.IsNullOrEmpty(a.身份码) Then 串 = 串 & "&pclcode=" & Uri.EscapeDataString(a.身份码)
+        If Not String.IsNullOrEmpty(a.Cid) Then 串 = 串 & "&pclcid=" & Uri.EscapeDataString(a.Cid)
         Return 串
+    End Function
+
+    ''' <summary>当前选中的账号（给启动时用）。</summary>
+    Public Function 当前账号() As 账号信息
+        Try
+            Dim 当前名 As String = ""
+            Dim 表 = 读账号(当前名)
+            If 表.Count = 0 Then Return Nothing
+            For Each a In 表
+                If a.名字 = 当前名 Then Return a
+            Next
+            Return 表(0)
+        Catch
+            Return Nothing
+        End Try
     End Function
 
 End Module

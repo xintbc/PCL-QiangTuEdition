@@ -605,7 +605,44 @@ Finish:
     '版本选择按钮
     Private Sub BtnVersion_Click() Handles BtnVersion.Click
         If McLaunchLoader.State = LoadState.Loading Then Return
+        '【改造】本地还没有枪战突击版本 → 先把最新版拉下来（1MB 左右，很快）
+        Try
+            If ModQiangTu.本地版本数() = 0 Then
+                下载最新枪战突击版本()
+                Return
+            End If
+        Catch
+        End Try
         FrmMain.PageChange(FormMain.PageType.InstanceSelect)
+    End Sub
+
+    ''' <summary>【改造】下载发布中心的最新版本，装进 versions 目录，然后刷新列表。</summary>
+    Private Sub 下载最新枪战突击版本()
+        Hint("正在读取枪战突击版本清单…")
+        Dim 线程 As New Threading.Thread(
+            Sub()
+                Try
+                    Dim 模组 As List(Of ModQiangTu.模组信息) = Nothing
+                    Dim 表 = ModQiangTu.拉清单(模组)
+                    If 表 Is Nothing OrElse 表.Count = 0 Then
+                        RunInUi(Sub() Hint("没读到版本清单，检查网络后重试", HintType.Red))
+                        Return
+                    End If
+                    Dim 最新 = 表(0)
+                    RunInUi(Sub() Hint("正在下载枪战突击 " & 最新.版本 & "…"))
+                    ModQiangTu.下载并安装(最新, Nothing)
+                    RunInUi(
+                        Sub()
+                            Hint("枪战突击 " & 最新.版本 & " 已装好，点「启动游戏」开玩", HintType.Green)
+                            McInstanceListForceRefresh = True
+                            LoaderFolderRun(McInstanceListLoader, McFolderSelected, LoaderFolderRunType.ForceRun, MaxDepth:=1, ExtraPath:="versions\")
+                        End Sub)
+                Catch ex As Exception
+                    RunInUi(Sub() Hint("下载失败：" & ex.Message, HintType.Red))
+                End Try
+            End Sub)
+        线程.IsBackground = True
+        线程.Start()
     End Sub
     '启动按钮
     Public Sub LaunchButtonClick() Handles BtnLaunch.Click
@@ -624,6 +661,21 @@ Finish:
         End If
         '实际的启动
         If BtnLaunch.Text = "启动游戏" Then
+            '【改造】枪战突击版本：不走 Java，直接开 index.html（账号自动带上）
+            Dim 实例名 As String = ""
+            Try
+                If McInstanceSelected IsNot Nothing Then 实例名 = McInstanceSelected.Name
+            Catch
+            End Try
+            If ModQiangTu.是枪战突击实例(实例名) Then
+                Try
+                    ModQiangTu.启动实例(实例名, ModQiangTu.当前账号())
+                    Return
+                Catch exQiangTu As Exception
+                    Hint("启动失败：" & exQiangTu.Message, HintType.Red)
+                    Return
+                End Try
+            End If
             McLaunchStart()
         ElseIf BtnLaunch.Text = "下载游戏" Then
             FrmMain.PageChange(FormMain.PageType.Download, FormMain.PageSubType.DownloadInstall)
