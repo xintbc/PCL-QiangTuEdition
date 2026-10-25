@@ -22,10 +22,20 @@ Public Module LocalResourceLoaders
             End If
 
             '获取 Mod 文件夹下的可用文件列表
+            '【改造】枪战突击实例：模组不在 mods\，而在 mode\模组\（扩展名 .js）
+            Dim 扫描目录 As String = Loader.Input
+            Try
+                Dim 版本目录 = PathUtils.RemoveLastPart(Loader.Input)
+                If ModQiangTu.是枪战突击实例(PathUtils.GetLastPart(版本目录)) Then
+                    Dim 枪模组 = Path.Combine(版本目录, "mode", "模组")
+                    If DirectoryUtils.Exists(枪模组) Then 扫描目录 = 枪模组
+                End If
+            Catch
+            End Try
             Dim ModFileList As New List(Of String)
-            If DirectoryUtils.Exists(Loader.Input) Then
-                For Each File In DirectoryUtils.EnumerateFiles(Loader.Input, True)
-                    If Not PathUtils.IsSame(PathUtils.RemoveLastPart(File), Loader.Input) Then
+            If DirectoryUtils.Exists(扫描目录) Then
+                For Each File In DirectoryUtils.EnumerateFiles(扫描目录, True)
+                    If Not PathUtils.IsSame(PathUtils.RemoveLastPart(File), 扫描目录) Then
                         '仅当 Forge 1.13- 且文件夹名与版本号相同时，才加载该子文件夹下的 Mod
                         If Not (PageInstanceLeft.Instance IsNot Nothing AndAlso PageInstanceLeft.Instance.Version.ModLoaders.HasFlagF(ModLoaders.Forge) AndAlso
                                 PageInstanceLeft.Instance.Version.Vanilla.Major < 13 AndAlso
@@ -37,7 +47,8 @@ Public Module LocalResourceLoaders
                     Function(FullName As String)
                         If FullName Is Nothing Then Return False
                         If {"disabled", "old"}.Contains(PathUtils.GetExtension(FullName)) Then FullName = PathUtils.GetFileNameWithoutExtension(FullName)
-                        Return {"jar", "zip", "litemod"}.Contains(PathUtils.GetExtension(FullName))
+                        '【改造】多认一个 js：枪战突击的模组就是 .js
+                        Return {"jar", "zip", "litemod", "js"}.Contains(PathUtils.GetExtension(FullName))
                     End Function
                     If IsModFile(File) Then ModFileList.Add(File)
                 Next
