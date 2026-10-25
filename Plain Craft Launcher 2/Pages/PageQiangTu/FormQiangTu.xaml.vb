@@ -345,12 +345,7 @@ Public Class FormQiangTu
     Private Sub 显示进度(比例 As Double, 文本 As String)
         Try
             Dispatcher.Invoke(Sub()
-                                  ' 解压阶段（文本带「解压」）没有百分比 → 进度条改成来回跑，别停在 98% 装死
-                                  If 文本 IsNot Nothing AndAlso 文本.Contains("解压") Then
-                                      BarProgress.IsIndeterminate = True
-                                      LabProgress.Text = 文本
-                                      Return
-                                  End If
+                                  ' 下载占 0~85%、解压占 85~100%，比例全程真实 → 进度条老老实实走，不会再卡在 97/98%
                                   BarProgress.IsIndeterminate = False
                                   BarProgress.Value = Math.Max(0, Math.Min(1, 比例))
                                   LabProgress.Text = 文本
