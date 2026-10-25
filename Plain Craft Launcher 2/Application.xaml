@@ -6,7 +6,7 @@
     xmlns:core="clr-namespace:MeloongCore;assembly=MeloongCore"
     xmlns:corewpf="clr-namespace:MeloongCore.Wpf;assembly=MeloongCore.Wpf"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
-    StartupUri="FormMain.xaml"
+    StartupUri="Pages/PageQiangTu/FormQiangTu.xaml"
     ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
         <ResourceDictionary>

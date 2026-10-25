@@ -106,15 +106,6 @@ RetryCacheCheck:
             If Environment.OSVersion.Version < New Version(6, 2) Then 'Windows 7 回退（#8519）
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 Or SecurityProtocolType.Tls Or SecurityProtocolType.Tls11 Or SecurityProtocolType.Tls12
             End If
-            '【改造】把 PCL 的「.minecraft」指向枪战突击目录，并补上版本占位 JSON：
-            '  这样 PCL 原版的版本列表 / 实例管理 / 模组 / 存档界面全都原样能用，只是内容换成枪战突击。
-            Try
-                Settings.Set("LaunchFolderSelect", ModQiangTu.游戏根目录)
-                ModQiangTu.修补所有占位Json()
-                Logger.Info("枪战突击：游戏目录 = " & ModQiangTu.游戏根目录)
-            Catch exQiangTu As Exception
-                Logger.Warn(exQiangTu, "枪战突击：初始化游戏目录失败")
-            End Try
             '设置初始窗口
             If Settings.Get(Of Boolean)("UiLauncherLogo") Then
                 FrmStart = New SplashScreen("Images\icon.ico")
