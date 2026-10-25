@@ -6,6 +6,7 @@
 ' ============================================================================
 
 Imports System.ComponentModel
+Imports System.Diagnostics
 Imports System.Threading.Tasks
 Imports System.Windows
 Imports System.Windows.Controls
@@ -210,6 +211,16 @@ Public Class FormQiangTu
                                  End Try
                              End Sub)
         Task.Run(后)
+    End Sub
+
+    ' ---------------- 关于 ----------------
+    ''' <summary>点署名里的赞助链接 → 用浏览器打开（PCL 分发许可要求给出赞助链接）。</summary>
+    Private Sub 关于_赞助链接(sender As Object, e As System.Windows.Navigation.RequestNavigateEventArgs)
+        Try
+            Process.Start(New ProcessStartInfo(e.Uri.AbsoluteUri) With {.UseShellExecute = True})
+        Catch
+        End Try
+        e.Handled = True
     End Sub
 
 End Class

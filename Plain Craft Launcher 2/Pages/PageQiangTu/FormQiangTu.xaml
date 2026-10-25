@@ -157,6 +157,15 @@
                          Background="#FF2A3145" Foreground="{StaticResource 主蓝}" BorderThickness="0" />
             <TextBlock x:Name="LabProgress" Text="" FontSize="11"
                        Foreground="{StaticResource 文字次}" Margin="0,6,0,0" />
+            <!-- 关于（遵守 PCL 分发许可：署名原作者 + 赞助链接 + 第三方声明） -->
+            <TextBlock FontSize="11" Foreground="#FF6B7488" Margin="0,6,0,0" TextWrapping="Wrap">
+                <Run Text="本软件是第三方基于 Plain Craft Launcher 2 (PCL) 独立进行二次创作的产物，与 PCL 官方无关。" />
+                <LineBreak />
+                <Run Text="原项目作者：龙腾猫跃　赞助支持原作者：" />
+                <Hyperlink NavigateUri="https://afdian.net/@LTCat" RequestNavigate="关于_赞助链接">
+                    <Run Text="afdian.net/@LTCat" Foreground="#FF5B9CFF" />
+                </Hyperlink>
+            </TextBlock>
         </StackPanel>
     </Grid>
 </Window>
