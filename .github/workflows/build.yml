@@ -26,15 +26,26 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path output | Out-Null
-          $bin = "Plain Craft Launcher 2\bin"
-          if (Test-Path $bin) {
-            Copy-Item "$bin\*.exe" output\ -ErrorAction SilentlyContinue
-            Copy-Item "$bin\*.dll" output\ -ErrorAction SilentlyContinue
-            Copy-Item "$bin\*.config" output\ -ErrorAction SilentlyContinue
-            Copy-Item "$bin\*.xml" output\ -ErrorAction SilentlyContinue
+          # 可执行文件在 bin\Release（老式 vbproj）。以前只拷了 bin 根目录，
+          # 结果一个文件都没收到 → 产物只剩几个 dll。
+          $rel = "Plain Craft Launcher 2\bin\Release"
+          if (-not (Test-Path $rel)) { $rel = "Plain Craft Launcher 2\bin" }
+          Write-Host "可执行目录：$rel"
+          Copy-Item "$rel\*" output\ -Recurse -Force -ErrorAction SilentlyContinue
+
+          # ★ 关键：Resources 里是 PCL 运行时**动态加载**的第三方 DLL
+          #   （Newtonsoft.Json / NAudio / Ookii.Dialogs.Wpf / Imazen.WebP / CacheCow …）
+          #   还有字体 Font.ttf、主题 Custom.xaml。缺了它启动就退（exit code 4），
+          #   窗口都出不来。以前没打包这一项，所以产物是"能编出来但打不开"的。
+          if (Test-Path "Plain Craft Launcher 2\Resources") {
+            Copy-Item "Plain Craft Launcher 2\Resources" output\ -Recurse -Force
           }
+
           Write-Host "产物清单："
-          Get-ChildItem output | Select-Object Name, Length | Format-Table
+          Get-ChildItem output -Recurse | Select-Object FullName, Length | Format-Table
+          $exe = Get-ChildItem output -Filter *.exe -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "没找到 exe，编译可能失败了" }
+          Write-Host "主程序：$($exe.FullName)"
 
       - name: 上传可执行文件
         uses: actions/upload-artifact@v4

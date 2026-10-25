@@ -257,11 +257,10 @@ Public Module ModQiangTu
         If Not File.Exists(zip路径) Then Throw New FileNotFoundException("下载失败：临时文件不存在")
 
         ' ② 解压（85~100%，带条目进度）
-        Try
-            解压Zip(zip路径, 目录, 进度)
-        Finally
-            Try : File.Delete(zip路径) : Catch : End Try
-        End Try
+        '    解压成功才删 zip：万一失败，zip 还在目录里，玩家可以自己解压/我们下次重试。
+        '    以前用 Finally 无条件删 → 解压一出错包就没了，玩家只能重新下。
+        解压Zip(zip路径, 目录, 进度)
+        Try : File.Delete(zip路径) : Catch : End Try
 
         写版本占位Json(项)
         Try

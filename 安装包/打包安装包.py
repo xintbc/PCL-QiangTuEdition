@@ -27,13 +27,24 @@ def 收(磁盘路径, 相对路径):
         文件们.append((磁盘路径, 相对路径.replace('\\', '/')))
 
 
-# PCL 版需要的全部文件（exe 缺 dll 会起不来）
-for 名 in ['Plain Craft Launcher 2.exe', 'Plain Craft Launcher 2.exe.config', 'Plain Craft Launcher 2.xml',
-           'MeloongCore.dll', 'MeloongCore.Wpf.dll', 'PCLCS.dll', 'Microsoft.Win32.Registry.dll']:
-    收(os.path.join(产物目录, 名), 名)
+# PCL 版需要的全部文件
+# ★ 必须**整个产物目录递归收**：Resources\ 里是运行时动态加载的第三方 DLL
+#   （Newtonsoft.Json / NAudio / Ookii.Dialogs.Wpf / Imazen.WebP / CacheCow …）
+#   和字体 Font.ttf、主题 Custom.xaml。以前写死只收 7 个文件，缺 Resources
+#   → 装完双击没反应（进程直接退出，窗口都出不来）。
+跳过后缀 = ('.pdb',)
+for 目录, 子目录, 文件名们 in os.walk(产物目录):
+    for f in 文件名们:
+        if f.lower().endswith(跳过后缀):
+            continue
+        全 = os.path.join(目录, f)
+        收(全, os.path.relpath(全, 产物目录))
 
 assert 文件们, '没找到 PCL 产物：请先跑 GitHub Actions 并把产物解压到 _PCL产物/PCL-QiangTuEdition'
-print('待内嵌文件 %d 个' % len(文件们))
+# 体积兜底：缺 Resources 说明产物还是旧的，直接报错别打出坏包
+资源数 = sum(1 for _, r in 文件们 if r.lower().startswith('resources/'))
+assert 资源数 > 0, '产物里没有 Resources 目录（编译流水线没打包它）——请重新跑 Actions 再打包'
+print('待内嵌文件 %d 个（其中 Resources %d 个）' % (len(文件们), 资源数))
 
 # 1) ASCII 临时目录（000001.bin …），中文路径全躲开
 if os.path.exists(临时):
