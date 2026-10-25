@@ -58,10 +58,10 @@
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" Text="版本列表" FontSize="14" FontWeight="Bold" Margin="6,4,0,8"
                            Foreground="{DynamicResource ColorBrush1}" />
-                <local:MyScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="PanVersionList" />
-                </local:MyScrollViewer>
+                </ScrollViewer>
             </Grid>
         </Border>
 
@@ -111,10 +111,10 @@
                         <TextBlock Grid.Column="1" x:Name="LabModHint" FontSize="11.5"
                                    Foreground="{DynamicResource ColorBrushGray2}" VerticalAlignment="Center" />
                     </Grid>
-                    <local:MyScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled">
                         <StackPanel x:Name="PanModList" />
-                    </local:MyScrollViewer>
+                    </ScrollViewer>
                     <Grid Grid.Row="2" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
