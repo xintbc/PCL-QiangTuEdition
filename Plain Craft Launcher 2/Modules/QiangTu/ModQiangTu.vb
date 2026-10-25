@@ -113,7 +113,7 @@ Public Module ModQiangTu
         Dim 结果 As New List(Of 版本信息)
         模组表 = New List(Of 模组信息)
         Try
-            Dim json = NetRequestByLoader(发布中心 & "manifest.json", IsJson:=True)
+            Dim json = 取文本(发布中心 & "manifest.json")
             Dim 根 = JObject.Parse(json)
 
             Dim 版本数组 = TryCast(根("版本"), JArray)
@@ -279,6 +279,11 @@ Public Module ModQiangTu
     Public Sub 下载文件(URL As String, 目标 As String, Optional 外进度 As Action(Of Double, String) = Nothing)
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 Or SecurityProtocolType.Tls11
 
+        ' ★ 关掉系统代理：本机 IE 代理设成了 127.0.0.1:80 但根本没服务在监听，
+        '    .NET 默认会去连它 → 每次都是"连接被拒绝"，表现就是下载不出东西 / 卡在某个百分比。
+        '    这里统一直连（发布中心是公网 GitHub Pages，直连可达）。
+        WebRequest.DefaultWebProxy = Nothing
+
         ' ① 探总长 / 是否支持分片
         Dim 总长 As Long = -1
         Dim 支持分片 As Boolean = False
@@ -287,6 +292,7 @@ Public Module ModQiangTu
         探.UserAgent = "QiangTuLauncher/1.0"
         探.Timeout = 30000
         探.ReadWriteTimeout = 30000
+        探.Proxy = Nothing
         探.AddRange(0, 0)
         Try
             Using 响 = CType(探.GetResponse(), HttpWebResponse)
@@ -315,6 +321,7 @@ Public Module ModQiangTu
                 Dim 请 = CType(WebRequest.Create(URL), HttpWebRequest)
                 请.UserAgent = "QiangTuLauncher/1.0"
                 请.Timeout = 60000
+                请.Proxy = Nothing
                 Using 响 = CType(请.GetResponse(), HttpWebResponse)
                     Using 入 = 响.GetResponseStream()
                         Using 出 As New FileStream(目标, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)
@@ -337,6 +344,7 @@ Public Module ModQiangTu
             Dim 请2 = CType(WebRequest.Create(URL), HttpWebRequest)
             请2.UserAgent = "QiangTuLauncher/1.0"
             请2.Timeout = 60000
+            请2.Proxy = Nothing
             Using 响 = CType(请2.GetResponse(), HttpWebResponse)
                 Using 入 = 响.GetResponseStream()
                     Using 出 As New FileStream(目标, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)
@@ -406,6 +414,7 @@ Public Module ModQiangTu
                 请.UserAgent = "QiangTuLauncher/1.0"
                 请.Timeout = 30000
                 请.ReadWriteTimeout = 30000
+                请.Proxy = Nothing
                 请.AddRange(起, 止)
                 Using 响 = CType(请.GetResponse(), HttpWebResponse)
                     Using 入 = 响.GetResponseStream()
@@ -515,19 +524,46 @@ Public Module ModQiangTu
             Return
         End If
 
-        ' 回退：没有外壳 exe，用浏览器打开（file:// 下 IndexedDB / 麦克风会受限，仅作兼容）
+        ' 回退：没有外壳 exe（老版本包 / 下载不完整），用默认浏览器打开。
+        ' ⚠️ 传本地路径而不是 file:// URI —— ShellExecute 对 file:// 有时会报
+        '    「Windows 找不到该路径」，本地路径最稳。
         Dim 入口 = Path.Combine(目录, "index.html")
         If Not File.Exists(入口) Then 入口 = Path.Combine(目录, "多文件版", "index.html")
         If Not File.Exists(入口) Then
-            Throw New FileNotFoundException("这个版本还没下载完（找不到 枪战突击.exe / index.html）：" & 目录)
+            Throw New FileNotFoundException(
+                "这个版本还没下载好（目录里既没有 枪战突击.exe 也没有 index.html）。" & vbCrLf &
+                vbCrLf & "目录：" & 目录 & vbCrLf &
+                "请点右边的「重新下载」把它补全。")
         End If
-        Process.Start(New ProcessStartInfo(New Uri(入口).AbsoluteUri & 参) With {.UseShellExecute = True})
+        Process.Start(New ProcessStartInfo(入口) With {.UseShellExecute = True, .WorkingDirectory = Path.GetDirectoryName(入口)})
     End Sub
 
     ''' <summary>启动一个版本（内部用）。</summary>
     Public Sub 启动版本(项 As 版本信息, Optional 账号 As 账号信息 = Nothing)
         启动实例(实例名(项), 账号)
     End Sub
+
+    ''' <summary>
+    ''' 取一个 URL 的文本（自己实现，显式禁用系统代理）。
+    ''' ⚠️ 不用 PCL 的 NetRequestByLoader：它走系统代理，本机代理是死的 127.0.0.1:80，
+    '''    会一直"连接被拒绝"，玩家看到的就是清单拉不出来 / 下载不出东西。
+    ''' </summary>
+    Public Function 取文本(URL As String) As String
+        WebRequest.DefaultWebProxy = Nothing
+        Dim 请 = CType(WebRequest.Create(URL), HttpWebRequest)
+        请.Method = "GET"
+        请.UserAgent = "QiangTuLauncher/1.0"
+        请.Timeout = 30000
+        请.ReadWriteTimeout = 30000
+        请.Proxy = Nothing
+        ' 关缓存：发布中心刚更新时别拿到旧清单
+        请.CachePolicy = New Net.Cache.RequestCachePolicy(Net.Cache.RequestCacheLevel.NoCacheNoStore)
+        Using 响 = CType(请.GetResponse(), HttpWebResponse)
+            Using 入 = New StreamReader(响.GetResponseStream(), Encoding.UTF8)
+                Return 入.ReadToEnd()
+            End Using
+        End Using
+    End Function
 
     ''' <summary>删掉一个版本的本地文件（保留版本库根）。</summary>
     Public Sub 删除版本(项 As 版本信息)
