@@ -48,6 +48,7 @@
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -60,7 +61,31 @@
                        FontSize="12" Foreground="{StaticResource 文字次}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
         </StackPanel>
 
-        <Grid Grid.Row="1">
+        <!-- 账号栏：启动器管一份账号，所有版本共用（下新版本不用重设） -->
+        <Border Grid.Row="1" Background="{StaticResource 卡片底}" CornerRadius="8"
+                Padding="12,8" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="👤 账号" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource 文字主}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <ComboBox Grid.Column="1" x:Name="CmbAccount" Height="28" FontSize="13"
+                          VerticalContentAlignment="Center" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0">
+                    <Button x:Name="BtnAccAdd" Content="＋ 新增" Style="{StaticResource 次按钮}"
+                            Padding="12,5" FontSize="12" Margin="0,0,6,0" />
+                    <Button x:Name="BtnAccEdit" Content="✎ 编辑" Style="{StaticResource 次按钮}"
+                            Padding="12,5" FontSize="12" Margin="0,0,6,0" />
+                    <Button x:Name="BtnAccDel" Content="－ 删除" Style="{StaticResource 次按钮}"
+                            Padding="12,5" FontSize="12" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="420" />
                 <ColumnDefinition Width="14" />
@@ -152,7 +177,7 @@
         </Grid>
 
         <!-- 底部进度 -->
-        <StackPanel Grid.Row="2" Margin="2,14,2,0">
+        <StackPanel Grid.Row="3" Margin="2,14,2,0">
             <ProgressBar x:Name="BarProgress" Height="6" Minimum="0" Maximum="1"
                          Background="#FF2A3145" Foreground="{StaticResource 主蓝}" BorderThickness="0" />
             <TextBlock x:Name="LabProgress" Text="" FontSize="11"

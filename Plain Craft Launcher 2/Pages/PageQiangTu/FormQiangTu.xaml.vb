@@ -13,6 +13,7 @@ Imports System.Diagnostics
 Imports System.Threading.Tasks
 Imports System.Windows
 Imports System.Windows.Controls
+Imports System.Windows.Media
 Imports System.Windows.Navigation
 
 Public Class FormQiangTu
@@ -33,6 +34,8 @@ Public Class FormQiangTu
 
     Private 版本表 As New List(Of ModQiangTu.版本信息)
     Private 模组表 As New List(Of ModQiangTu.模组信息)
+    Private 账号表 As New List(Of ModQiangTu.账号信息)
+    Private 当前账号名 As String = ""
     Private 忙 As Boolean = False
 
     Public Sub New()
@@ -44,9 +47,167 @@ Public Class FormQiangTu
         AddHandler BtnDelete.Click, AddressOf 删除选中
         AddHandler LstVersion.SelectionChanged, AddressOf 选中变化
         AddHandler LstVersion.MouseDoubleClick, AddressOf 双击启动
+        AddHandler CmbAccount.SelectionChanged, AddressOf 账号切换
+        AddHandler BtnAccAdd.Click, AddressOf 账号新增
+        AddHandler BtnAccEdit.Click, AddressOf 账号编辑
+        AddHandler BtnAccDel.Click, AddressOf 账号删除
     End Sub
 
+    ' ==================== 账号 ====================
+    Private Sub 载入账号()
+        账号表 = ModQiangTu.读账号(当前账号名)
+        If 账号表.Count = 0 Then
+            ' 第一次用：建一个默认账号，玩家在「编辑」里改名字/身份码
+            账号表.Add(New ModQiangTu.账号信息 With {.名字 = "玩家1"})
+            当前账号名 = "玩家1"
+            ModQiangTu.写账号(账号表, 当前账号名)
+        End If
+        If String.IsNullOrEmpty(当前账号名) Then 当前账号名 = 账号表(0).名字
+        刷新账号下拉()
+    End Sub
+
+    Private Sub 刷新账号下拉()
+        Dim 旧 = 当前账号名
+        CmbAccount.Items.Clear()
+        Dim 选中项 As ModQiangTu.账号信息 = Nothing
+        For Each a In 账号表
+            CmbAccount.Items.Add(a.显示)
+            If a.名字 = 旧 Then 选中项 = a
+        Next
+        If 选中项 Is Nothing AndAlso 账号表.Count > 0 Then 选中项 = 账号表(0)
+        If 选中项 IsNot Nothing Then
+            CmbAccount.SelectedItem = 选中项.显示
+            当前账号名 = 选中项.名字
+        End If
+    End Sub
+
+    Private Function 选中账号() As ModQiangTu.账号信息
+        Dim 名 = 当前账号名
+        For Each a In 账号表
+            If a.名字 = 名 Then Return a
+        Next
+        If 账号表.Count > 0 Then Return 账号表(0)
+        Return Nothing
+    End Function
+
+    Private Sub 账号切换(sender As Object, e As SelectionChangedEventArgs)
+        Try
+            Dim 文 = TryCast(CmbAccount.SelectedItem, String)
+            If String.IsNullOrEmpty(文) Then Return
+            For Each a In 账号表
+                If a.显示 = 文 Then
+                    当前账号名 = a.名字
+                    ModQiangTu.写账号(账号表, 当前账号名)
+                    LabProgress.Text = "当前账号：" & a.名字 & If(String.IsNullOrEmpty(a.身份码), "（没有身份码，换设备会找不回名字）", "")
+                    Return
+                End If
+            Next
+        Catch
+        End Try
+    End Sub
+
+    Private Sub 账号新增(sender As Object, e As RoutedEventArgs)
+        Dim 名 = 输入框("新增账号", "游戏里的名字（1~8 个字）：", "")
+        If String.IsNullOrEmpty(名) Then Return
+        名 = 名.Trim()
+        For Each a In 账号表
+            If a.名字 = 名 Then
+                MessageBox.Show("已经有同名账号了。", "重名", MessageBoxButton.OK, MessageBoxImage.Information)
+                Return
+            End If
+        Next
+        账号表.Add(New ModQiangTu.账号信息 With {.名字 = 名})
+        当前账号名 = 名
+        ModQiangTu.写账号(账号表, 当前账号名)
+        刷新账号下拉()
+        LabProgress.Text = "已新增账号 " & 名 & "；想填身份码点「编辑」"
+    End Sub
+
+    Private Sub 账号编辑(sender As Object, e As RoutedEventArgs)
+        Dim a = 选中账号()
+        If a Is Nothing Then Return
+        Dim 名 = 输入框("编辑账号", "名字（1~8 个字）：", a.名字)
+        If String.IsNullOrEmpty(名) Then Return
+        Dim 码 = 输入框("编辑账号", "身份码（6 位，可留空）：", a.身份码)
+        Dim 注 = 输入框("编辑账号", "备注（随便写，可留空）：", a.备注)
+        a.名字 = 名.Trim()
+        a.身份码 = 码.Trim().ToUpper()
+        a.备注 = 注.Trim()
+        当前账号名 = a.名字
+        ModQiangTu.写账号(账号表, 当前账号名)
+        刷新账号下拉()
+        LabProgress.Text = "账号已保存：" & a.名字
+    End Sub
+
+    Private Sub 账号删除(sender As Object, e As RoutedEventArgs)
+        Dim a = 选中账号()
+        If a Is Nothing Then Return
+        If 账号表.Count <= 1 Then
+            MessageBox.Show("至少要留一个账号。", "不能删", MessageBoxButton.OK, MessageBoxImage.Information)
+            Return
+        End If
+        If MessageBox.Show("确定删除账号「" & a.名字 & "」吗？（只删启动器里的记录，不影响游戏存档）",
+                           "删除账号", MessageBoxButton.YesNo, MessageBoxImage.Question) <> MessageBoxResult.Yes Then Return
+        账号表.Remove(a)
+        当前账号名 = 账号表(0).名字
+        ModQiangTu.写账号(账号表, 当前账号名)
+        刷新账号下拉()
+        LabProgress.Text = "已删除账号 " & a.名字
+    End Sub
+
+    Private _输入框结果 As String = Nothing
+    Private _输入框文本框 As TextBox = Nothing
+    Private _输入框窗口 As Window = Nothing
+
+    Private Sub 输入确定(sender As Object, e As RoutedEventArgs)
+        _输入框结果 = _输入框文本框.Text
+        _输入框窗口.Close()
+    End Sub
+
+    Private Sub 输入取消(sender As Object, e As RoutedEventArgs)
+        _输入框窗口.Close()
+    End Sub
+
+    ''' <summary>简易输入框（WPF 没有内置 InputBox）。</summary>
+    Private Function 输入框(标题 As String, 提示 As String, 默认值 As String) As String
+        Dim 窗 As New Window With {
+            .Title = 标题, .Width = 420, .Height = 190,
+            .WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            .Owner = Me, .ResizeMode = ResizeMode.NoResize, .Background = Background
+        }
+        Dim 格 As New Grid With {.Margin = New Thickness(16)}
+        格.RowDefinitions.Add(New RowDefinition With {.Height = GridLength.Auto})
+        格.RowDefinitions.Add(New RowDefinition With {.Height = GridLength.Auto})
+        格.RowDefinitions.Add(New RowDefinition With {.Height = GridLength.Auto})
+        Dim 标 As New TextBlock With {.Text = 提示, .FontSize = 12, .Margin = New Thickness(0, 0, 0, 8)}
+        标.Foreground = New SolidColorBrush(Color.FromRgb(&H8B, &H94, &HAD))
+        格.Children.Add(标)
+        Dim 框 As New TextBox With {.Text = 默认值, .Height = 30, .FontSize = 14, .Margin = New Thickness(0, 0, 0, 12)}
+        框.VerticalContentAlignment = VerticalAlignment.Center
+        Grid.SetRow(框, 1)
+        格.Children.Add(框)
+        Dim 钮格 As New StackPanel With {.Orientation = Orientation.Horizontal, .HorizontalAlignment = HorizontalAlignment.Right}
+        Grid.SetRow(钮格, 2)
+        Dim 确定 As New Button With {.Content = "确定", .Width = 84, .Height = 30, .Margin = New Thickness(0, 0, 8, 0)}
+        确定.Style = TryCast(FindResource("主按钮"), Style)
+        Dim 取消 As New Button With {.Content = "取消", .Width = 84, .Height = 30}
+        取消.Style = TryCast(FindResource("次按钮"), Style)
+        钮格.Children.Add(确定)
+        钮格.Children.Add(取消)
+        格.Children.Add(钮格)
+        窗.Content = 格
+        _输入框结果 = Nothing
+        _输入框文本框 = 框
+        _输入框窗口 = 窗
+        AddHandler 确定.Click, AddressOf 输入确定
+        AddHandler 取消.Click, AddressOf 输入取消
+        窗.ShowDialog()
+        Return _输入框结果
+    End Function
+
+
     Private Sub 窗口加载(sender As Object, e As RoutedEventArgs)
+        载入账号()
         刷新清单()
     End Sub
 
@@ -197,8 +358,9 @@ Public Class FormQiangTu
         Dim v = 选中版本()
         If v Is Nothing Then Return
         Try
-            ModQiangTu.启动版本(v)
-            LabProgress.Text = "已启动 v" & v.版本
+            Dim a = 选中账号()
+            ModQiangTu.启动版本(v, a)
+            LabProgress.Text = "已启动 v" & v.版本 & If(a Is Nothing, "", "（账号：" & a.名字 & "）")
         Catch ex As Exception
             MessageBox.Show(ex.Message, "启动失败", MessageBoxButton.OK, MessageBoxImage.Warning)
         End Try
