@@ -226,6 +226,7 @@ Public Module ModQiangTu
     ' ---------------- 下载 ----------------
     ''' <summary>下载并安装一个版本：下载 zip（PCL 多线程下载器）→ 解压 → 写占位 JSON。</summary>
     Public Sub 下载并安装(项 As 版本信息, Optional 进度 As Action(Of Double, String) = Nothing)
+        ' 每个版本一个独立目录（枪战突击 v1.7.0 / v1.8.0 …… 天然共存，互不覆盖）
         Dim 目录 = 本版本目录(项)
         Directory.CreateDirectory(目录)
         Dim zip路径 = Path.Combine(目录, "_下载.zip")

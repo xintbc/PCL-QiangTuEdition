@@ -52,13 +52,12 @@ Public Class FormQiangTu
     ' ==================== 账号 ====================
     Private Sub 载入账号()
         账号表 = ModQiangTu.读账号(当前账号名)
-        If 账号表.Count = 0 Then
-            账号表.Add(New ModQiangTu.账号信息 With {.名字 = "玩家1"})
-            当前账号名 = "玩家1"
-            ModQiangTu.写账号(账号表, 当前账号名)
-        End If
-        If String.IsNullOrEmpty(当前账号名) Then 当前账号名 = 账号表(0).名字
+        ' 初始**不**建默认账号（用户要求：第一次打开应该是空的，让自己新增）
+        If 账号表.Count > 0 AndAlso String.IsNullOrEmpty(当前账号名) Then 当前账号名 = 账号表(0).名字
         刷新账号下拉()
+        If 账号表.Count = 0 Then
+            LabProgress.Text = "还没有账号 —— 点右上角「新增」填游戏名字（可建多个，随时切换）"
+        End If
     End Sub
 
     Private Sub 刷新账号下拉()
@@ -69,7 +68,15 @@ Public Class FormQiangTu
             CmbAccount.Items.Add(a.显示)
             If a.名字 = 旧 Then 选中项 = a
         Next
-        If 选中项 Is Nothing AndAlso 账号表.Count > 0 Then 选中项 = 账号表(0)
+        If 账号表.Count = 0 Then
+            CmbAccount.Items.Add("（未设置账号）")
+            CmbAccount.SelectedIndex = 0
+            CmbAccount.IsEnabled = False
+            当前账号名 = ""
+            Return
+        End If
+        CmbAccount.IsEnabled = True
+        If 选中项 Is Nothing Then 选中项 = 账号表(0)
         If 选中项 IsNot Nothing Then
             CmbAccount.SelectedItem = 选中项.显示
             当前账号名 = 选中项.名字
@@ -222,6 +229,8 @@ Public Class FormQiangTu
         BtnLaunch.IsEnabled = v.已安装 AndAlso Not 忙
         BtnDelete.IsEnabled = v.已安装 AndAlso Not 忙
         BtnDownload.IsEnabled = Not 忙
+        ' 已装过也能再下一次（覆盖更新/修复）：按钮文案跟着变，别让玩家以为只能下一次
+        BtnDownload.Text = If(v.已安装, "重新下载", "下载")
     End Sub
 
     ' ==================== 下载 ====================
@@ -250,7 +259,9 @@ Public Class FormQiangTu
                                       LabProgress.Text = "下载失败：" & 出错
                                       MessageBox.Show(出错, "下载失败", MessageBoxButton.OK, MessageBoxImage.Warning)
                                   Else
-                                      LabProgress.Text = "v" & v.版本 & " 已装好，点「启动游戏」"
+                                      BarProgress.IsIndeterminate = False
+                                      BarProgress.Value = 1
+                                      LabProgress.Text = "v" & v.版本 & " 已装好（可重复下载 / 多版本共存），点「启动游戏」"
                                   End If
                                   忙 = False
                                   刷新清单()
@@ -262,6 +273,13 @@ Public Class FormQiangTu
     Private Sub 显示进度(比例 As Double, 文本 As String)
         Try
             Dispatcher.Invoke(Sub()
+                                  ' 解压阶段（文本带「解压」）没有百分比 → 进度条改成来回跑，别停在 98% 装死
+                                  If 文本 IsNot Nothing AndAlso 文本.Contains("解压") Then
+                                      BarProgress.IsIndeterminate = True
+                                      LabProgress.Text = 文本
+                                      Return
+                                  End If
+                                  BarProgress.IsIndeterminate = False
                                   BarProgress.Value = Math.Max(0, Math.Min(1, 比例))
                                   LabProgress.Text = 文本
                               End Sub)
