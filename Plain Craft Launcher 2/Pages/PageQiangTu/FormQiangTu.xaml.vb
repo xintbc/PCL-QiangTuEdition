@@ -101,6 +101,7 @@ Public Class FormQiangTu
     End Sub
 
     Private Sub 账号新增(sender As Object, e As RoutedEventArgs)
+        Logger.Info("枪战突击：点到了「新增账号」")
         Dim 名 = 输入框("新增账号", "游戏里的名字（1~8 个字）：", "")
         If String.IsNullOrEmpty(名) Then Return
         名 = 名.Trim()
@@ -201,6 +202,8 @@ Public Class FormQiangTu
         LabModHint.Text = 模组表.Count & " 个可下载"
 
         LabStatus.Text = "共 " & 版本表.Count & " 个版本 · 版本库：" & ModQiangTu.版本库目录
+        ' 便于无界面验证：日志里能看到列表真的建出来了
+        Logger.Info($"枪战突击界面：版本项 {PanVersionList.Children.Count} 个 / 模组项 {PanModList.Children.Count} 个")
         If 第一项 IsNot Nothing Then 选定版本(TryCast(第一项.Tag, ModQiangTu.版本信息))
     End Sub
 
